@@ -102,9 +102,9 @@ def rpn_layer(base_layers, num_anchors):
         (3, 3),
         padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv1'
     )(base_layers)
-    x_class = Conv2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class')(x)
-    x_regr = Conv2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress')(x)
-    return [x_class, x_regr, base_layers]
+    rpn_out_class = Conv2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class')(x)
+    rpn_out_regress = Conv2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress')(x)
+    return rpn_out_class, rpn_out_regress
 
 
 def classifier_layer(base_layers, input_rois, num_rois, nb_classes=4):
@@ -137,10 +137,9 @@ def classifier_layer(base_layers, input_rois, num_rois, nb_classes=4):
     # There are two output layer
     # out_class: softmax acivation function for classify the class name of the object
     # out_regr: linear activation function for bboxes coordinates regression
-    out_class = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'),
-                                name='dense_class_{}'.format(nb_classes))(out)
+    classifier_out_class_softmax = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'),
+                                                   name='dense_class_{}'.format(nb_classes))(out)
     # note: no regression target for bg class
-    out_regr = TimeDistributed(Dense(4 * (nb_classes - 1), activation='linear', kernel_initializer='zero'),
-                               name='dense_regress_{}'.format(nb_classes))(out)
-
-    return [out_class, out_regr]
+    classifier_out_bbox_linear_regression = TimeDistributed(Dense(4 * (nb_classes - 1), activation='linear', kernel_initializer='zero'),
+                                                       name='dense_regress_{}'.format(nb_classes))(out)
+    return [classifier_out_class_softmax, classifier_out_bbox_linear_regression]

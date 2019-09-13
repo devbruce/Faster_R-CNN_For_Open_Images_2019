@@ -1,3 +1,4 @@
+#!/bin/bash
 mkdir ./data
 mkdir ./data/challenge-2019
 mkdir ./data/train_img

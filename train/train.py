@@ -25,13 +25,8 @@ warnings.filterwarnings('ignore')
 random.seed(2019)
 PROGRESS_VERBOSE = True
 
-C = Config()
 img_data_list, cls_cnt, cls_mapping = get_data(TRAIN_ANNOTATION_FILE_PATH)
-
-# bg 를 마지막 인덱스로 Mapping
-if 'bg' not in cls_cnt:
-    cls_cnt['bg'] = 0
-    cls_mapping['bg'] = len(cls_mapping)
+C = Config()
 C.cls_mapping = cls_mapping
 
 if PROGRESS_VERBOSE:
@@ -62,15 +57,21 @@ shared_layers = get_vgg16(img_input)
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)  # 3 x 3 = 9
 # rpn_layer return [x_class, x_regr, base_layers]
-rpn = rpn_layer(shared_layers, num_anchors)
+rpn_out_class, rpn_out_regress = rpn_layer(shared_layers, num_anchors)
 # classifier_layer return [out_class, out_regr]
-classifier = classifier_layer(shared_layers, roi_input, C.num_rois, nb_classes=len(cls_cnt))
+classifier_out_class_softmax, classifier_out_bbox_linear_regression = classifier_layer(shared_layers, roi_input, C.num_rois, nb_classes=len(cls_cnt))
 
-model_rpn = Model(img_input, rpn[:2])
-model_classifier = Model([img_input, roi_input], classifier)
+model_rpn = Model(img_input, [rpn_out_class, rpn_out_regress])
+model_classifier = Model(
+    [img_input, roi_input],
+    [classifier_out_class_softmax, classifier_out_bbox_linear_regression]
+)
 
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
-model_all = Model([img_input, roi_input], rpn[:2] + classifier)
+model_all = Model(
+    [img_input, roi_input],
+    [rpn_out_class, rpn_out_regress] + [classifier_out_class_softmax, classifier_out_bbox_linear_regression]
+)
 
 # we need to save the model and load the model to continue training
 if not os.path.isfile(C.model_path):
@@ -141,8 +142,8 @@ iter_num = 0
 total_epochs += num_epochs
 
 losses = np.zeros((epoch_length, 5))
-rpn_accuracy_rpn_monitor = []
-rpn_accuracy_for_epoch = []
+rpn_accuracy_rpn_monitor = list()
+rpn_accuracy_for_epoch = list()
 best_loss = np.Inf if len(record_df) == 0 else np.min(r_curr_loss)
 
 # === Training ====
@@ -154,10 +155,9 @@ for epoch_num in range(num_epochs):
 
     while True:
         try:
-
             if len(rpn_accuracy_rpn_monitor) == epoch_length and C.verbose:
                 mean_overlapping_bboxes = float(sum(rpn_accuracy_rpn_monitor)) / len(rpn_accuracy_rpn_monitor)
-                rpn_accuracy_rpn_monitor = []
+                rpn_accuracy_rpn_monitor = list()
                 # print('Average number of overlapping bounding boxes from RPN = {} for {} previous iterations'.format(mean_overlapping_bboxes, epoch_length))
                 if mean_overlapping_bboxes == 0:
                     print(

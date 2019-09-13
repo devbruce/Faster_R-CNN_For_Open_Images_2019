@@ -76,5 +76,10 @@ def get_data(fpath):
             val_to_switch = cls_mapping['bg']  # 현재 bg 의 Index
             cls_mapping[key_to_switch], cls_mapping['bg'] = val_to_switch, len(cls_mapping) - 1
 
+        # Make sure cls_cnt and cls_mapping have the bg class
+        if not found_bg:
+            cls_cnt['bg'] = 0
+            cls_mapping['bg'] = len(cls_mapping)
+
     print('\n#### End of Get Data From Annotation File ####\n')
     return img_data_list, cls_cnt, cls_mapping
