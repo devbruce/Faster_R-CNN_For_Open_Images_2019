@@ -40,11 +40,13 @@ def calc_iou(non_max_sup_bboxes, img_data, config, cls_mapping):
         x2 = int(round(x2))
         y2 = int(round(y2))
 
+        bbox_coord = [x1, y1, x2, y2]
         best_iou = 0.0
         best_bbox = -1
         # Iterate through all the ground-truth bboxes to calculate the iou
         for bbox_num in range(nb_gt_bboxes):
-            curr_iou = iou([gta[bbox_num, 0], gta[bbox_num, 2], gta[bbox_num, 1], gta[bbox_num, 3]], [x1, y1, x2, y2])
+            gt_bbox_coord = [gta[bbox_num, 0], gta[bbox_num, 2], gta[bbox_num, 1], gta[bbox_num, 3]]
+            curr_iou = iou(gt_bbox_coord, bbox_coord)
 
             # Find out the corresponding ground-truth bbox_num with larget iou
             if curr_iou > best_iou:
@@ -64,16 +66,16 @@ def calc_iou(non_max_sup_bboxes, img_data, config, cls_mapping):
                 cls_name = 'bg'
             elif best_iou >= config.classifier_max_overlap:  # best_iou >= 0.7
                 cls_name = gt_bboxes[best_bbox]['class']
-                cxg = (gta[best_bbox, 0] + gta[best_bbox, 1]) / 2.0
-                cyg = (gta[best_bbox, 2] + gta[best_bbox, 3]) / 2.0
+                cx_gt = (gta[best_bbox, 0] + gta[best_bbox, 1]) / 2.0
+                cy_gt = (gta[best_bbox, 2] + gta[best_bbox, 3]) / 2.0
 
                 cx = x1 + w / 2.0
                 cy = y1 + h / 2.0
 
-                tx = (cxg - cx) / float(w)
-                ty = (cyg - cy) / float(h)
-                tw = np.log((gta[best_bbox, 1] - gta[best_bbox, 0]) / float(w))
-                th = np.log((gta[best_bbox, 3] - gta[best_bbox, 2]) / float(h))
+                tx = (cx_gt - cx) / float(w)
+                ty = (cy_gt - cy) / float(h)
+                tw = np.log((gta[best_bbox, 1] - gta[best_bbox, 0]) / float(w))  # (x2_gt - x1_gt) / w
+                th = np.log((gta[best_bbox, 3] - gta[best_bbox, 2]) / float(h))  # (y2_gt - y1_gt) / y
             else:
                 print('roi = {}'.format(best_iou))
                 raise RuntimeError
@@ -105,10 +107,10 @@ def calc_iou(non_max_sup_bboxes, img_data, config, cls_mapping):
         return None, None, None, None
 
     # bboxes that iou > config.classifier_min_overlap for all gt bboxes in 300 non_max_suppression bboxes
-    X = np.array(x_roi)
-    # one hot code for bboxes from above => x_roi (X)
-    Y1 = np.array(y_class_num)
+    X_roi = np.array(x_roi)
+    # one hot code for bboxes from above => x_roi (X_train_roi)
+    Y_cls_num = np.array(y_class_num)
     # corresponding labels and corresponding gt bboxes
-    Y2 = np.concatenate([np.array(y_class_regr_label), np.array(y_class_regr_coords)], axis=1)
+    Y_label_and_gt = np.concatenate([np.array(y_class_regr_label), np.array(y_class_regr_coords)], axis=1)
 
-    return np.expand_dims(X, axis=0), np.expand_dims(Y1, axis=0), np.expand_dims(Y2, axis=0), IoUs
+    return np.expand_dims(X_roi, axis=0), np.expand_dims(Y_cls_num, axis=0), np.expand_dims(Y_label_and_gt, axis=0), IoUs

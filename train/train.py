@@ -71,7 +71,7 @@ model_classifier = Model(
 # this is a model that holds both the RPN and the classifier, used to load/save weights for the models
 model_all = Model(
     [img_input, roi_input],
-    [rpn_out_class, rpn_out_regress] + [classifier_out_class_softmax, classifier_out_bbox_linear_regression]
+    [rpn_out_class, rpn_out_regress, classifier_out_class_softmax, classifier_out_bbox_linear_regression]
 )
 
 # we need to save the model and load the model to continue training
@@ -168,33 +168,52 @@ for epoch_num in range(num_epochs):
                     )
 
             # Generate X (x_img) and label Y ([y_rpn_cls, y_rpn_regr])
-            X, Y, img_data, debug_img, debug_num_pos = next(train_data_gen)
+            # yield np.copy(img_aug), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug, debug_img, num_pos
+            X_train_img, X_train_img_data, Y_train, debug_img, debug_num_pos = next(train_data_gen)
 
             # Train rpn model and get loss value [_, loss_rpn_cls, loss_rpn_regr]
-            loss_rpn = model_rpn.train_on_batch(X, Y)
+            loss_rpn = model_rpn.train_on_batch(X_train_img, Y_train)
 
             # Get predicted rpn from rpn model [rpn_cls, rpn_regr]
-            P_rpn = model_rpn.predict_on_batch(X)
+            Y_hat_rpn = model_rpn.predict_on_batch(X_train_img)
+            Y_hat_rpn_cls = Y_hat_rpn[0]
+            Y_hat_rpn_regr = Y_hat_rpn[1]
 
-            # R: bboxes (shape=(300,4))
+            # non_max_sup_bboxes: bboxes (shape=(300,4))
             # Convert rpn layer to roi bboxes
-            non_max_sup_bboxes = rpn_to_roi(P_rpn[0], P_rpn[1], C, use_regr=True, overlap_thresh=0.7, max_boxes=300)
+            non_max_sup_bboxes = rpn_to_roi(
+                rpn_layer=Y_hat_rpn_cls,
+                regr_layer=Y_hat_rpn_regr,
+                config=C,
+                use_regr=True,
+                overlap_thresh=0.7,
+                max_boxes=300,
+            )
+            # ===================================================================
+            # rpn_layer: output layer for rpn classification
+            #     shape (1, feature_map.height, feature_map.width, num_anchors)
+            #     Might be (1, 18, 25, 18) if resized image is 400 width and 300
+            # regr_layer: output layer for rpn regression
+            #     shape (1, feature_map.height, feature_map.width, num_anchors)
+            #     Might be (1, 18, 25, 72) if resized image is 400 width and 300
+            # ===================================================================
 
             # note: calc_iou converts from (x1,y1,x2,y2) to (x,y,w,h) format
-            # X2: bboxes that iou > C.classifier_min_overlap for all gt bboxes in 300 non_max_suppression bboxes
-            # Y1: one hot code for bboxes from above => x_roi (X)
-            # Y2: corresponding labels and corresponding gt bboxes
-            X2, Y1, Y2, IouS = calc_iou(non_max_sup_bboxes, img_data, C, cls_mapping)
+            # X_train_roi: bboxes that iou > C.classifier_min_overlap for all gt bboxes in 300 non_max_suppression bboxes
+            # Y_train_cls_num: one hot code for bboxes from above => x_roi (X)
+            # Y_train_label_and_gt: corresponding labels and corresponding gt bboxes
+            # calc_iou return np.expand_dims(X_roi, axis=0), np.expand_dims(Y_cls_num, axis=0), np.expand_dims(Y_label_and_gt, axis=0), IoUs
+            X_train_roi, Y_train_cls_num, Y_train_label_and_gt, IouS = calc_iou(non_max_sup_bboxes, X_train_img_data, C, cls_mapping)
 
-            # If X2 is None means there are no matching bboxes
-            if X2 is None:
+            # If X_train_roi is None means there are no matching bboxes
+            if X_train_roi is None:
                 rpn_accuracy_rpn_monitor.append(0)
                 rpn_accuracy_for_epoch.append(0)
                 continue
 
             # Find out the positive anchors and negative anchors
-            neg_samples = np.where(Y1[0, :, -1] == 1)
-            pos_samples = np.where(Y1[0, :, -1] == 0)
+            neg_samples = np.where(Y_train_cls_num[0, :, -1] == 1)
+            pos_samples = np.where(Y_train_cls_num[0, :, -1] == 0)
 
             neg_samples = neg_samples[0] if len(neg_samples) > 0 else list()
             pos_samples = pos_samples[0] if len(pos_samples) > 0 else list()
@@ -233,15 +252,15 @@ for epoch_num in range(num_epochs):
                 else:
                     selected_samples = random.choice(pos_samples)
 
-            # training_data: [X, X2[:, selected_samples, :]]
-            # labels: [Y1[:, selected_samples, :], Y2[:, selected_samples, :]]
-            #  X                     => img_data resized image
-            #  X2[:, selected_samples, :] => num_rois (4 in here) bboxes which contains selected neg and pos
-            #  Y1[:, selected_samples, :] => one hot encode for num_rois bboxes which contains selected neg and pos
-            #  Y2[:, selected_samples, :] => labels and gt bboxes for num_rois bboxes which contains selected neg and pos
+            # training_data: [X, X_train_roi[:, selected_samples, :]]
+            # labels: [Y_train_cls_num[:, selected_samples, :], Y_train_label_and_gt[:, selected_samples, :]]
+            #  X                     => X_train_img_data resized image
+            #  X_train_roi[:, selected_samples, :] => num_rois (4 in here) bboxes which contains selected neg and pos
+            #  Y_train_cls_num[:, selected_samples, :] => one hot encode for num_rois bboxes which contains selected neg and pos
+            #  Y_train_label_and_gt[:, selected_samples, :] => labels and gt bboxes for num_rois bboxes which contains selected neg and pos
             loss_class = model_classifier.train_on_batch(
-                [X, X2[:, selected_samples, :]],
-                [Y1[:, selected_samples, :], Y2[:, selected_samples, :]],
+                x=[X_train_img, X_train_roi[:, selected_samples, :]],  # training data
+                y=[Y_train_cls_num[:, selected_samples, :], Y_train_label_and_gt[:, selected_samples, :]],  # target data
             )
 
             losses[iter_num, 0] = loss_rpn[1]
@@ -259,8 +278,7 @@ for epoch_num in range(num_epochs):
                                ('rpn_regr', np.mean(losses[:iter_num, 1])),
                                ('final_cls', np.mean(losses[:iter_num, 2])),
                                ('final_regr', np.mean(losses[:iter_num, 3])),
-                           ],
-            )
+                           ])
 
             if iter_num == epoch_length:
                 loss_rpn_cls = np.mean(losses[:, 0])
