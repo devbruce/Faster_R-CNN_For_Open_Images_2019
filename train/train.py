@@ -1,6 +1,14 @@
+import warnings
+import pickle
+import random
+import os
+import time
+
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import Progbar
+import pandas as pd
+import numpy as np
 
 from sub_func.get_data import get_data
 from sub_func.get_anchor_gt import get_anchor_gt
@@ -11,14 +19,6 @@ from sub_func.loss_func import rpn_loss_regr, rpn_loss_cls, class_loss_regr, cla
 from sub_func.rpn_to_roi import rpn_to_roi
 from sub_func.calc_iou import calc_iou
 from config import *
-
-import warnings
-import pickle
-import random
-import os
-import time
-import pandas as pd
-import numpy as np
 
 
 warnings.filterwarnings('ignore')
@@ -96,7 +96,8 @@ if not os.path.isfile(C.model_path):
             'loss_class_regr',
             'curr_loss',
             'elapsed_time',
-            'mAP']
+            'mAP'
+        ]
     )
 else:
     # If this is a continued training, load the trained model from before

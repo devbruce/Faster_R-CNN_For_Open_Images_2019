@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow.keras.backend as K
-from tensorflow.keras.layers import Dense, Conv2D, MaxPooling2D, Layer, TimeDistributed, Flatten, Dropout
+from tensorflow.keras.layers import Layer, Dense, Conv2D, MaxPooling2D, TimeDistributed, Flatten, Dropout
 
 
 _all__ = ['RoiPoolingConv', 'rpn_layer', 'classifier_layer']
@@ -24,6 +24,12 @@ class RoiPoolingConv(Layer):
         3D tensor with shape:
         `(1, num_rois, channels, pool_size, pool_size)`
     """
+    # Use Like Below (In the classifier_layer)
+    # # ### input_shape = (num_rois, 7, 7, 512)
+    # pooling_regions = 7
+    # # ### out_roi_pool.shape = (1, num_rois, channels, pool_size, pool_size)
+    # # ### num_rois (4) 7x7 roi pooling
+    # out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
 
     def __init__(self, pool_size, num_rois, **kwargs):
         self.pool_size = pool_size
@@ -40,9 +46,9 @@ class RoiPoolingConv(Layer):
         assert (len(x) == 2)
         # x[0] is image with shape (rows, cols, channels)
         img = x[0]
-        # x[1] is roi with shape (num_rois,4) with ordering (x,y,w,h)
+        # x[1] is roi with shape (num_rois, 4) with ordering (x, y, w, h)
         rois = x[1]
-        outputs = []
+        outputs = list()
 
         for roi_idx in range(self.num_rois):
             x = rois[0, roi_idx, 0]
@@ -50,12 +56,12 @@ class RoiPoolingConv(Layer):
             w = rois[0, roi_idx, 2]
             h = rois[0, roi_idx, 3]
 
-            x = K.cast(x, 'int32')
-            y = K.cast(y, 'int32')
-            w = K.cast(w, 'int32')
-            h = K.cast(h, 'int32')
+            x = K.cast(x, dtype='int32')
+            y = K.cast(y, dtype='int32')
+            w = K.cast(w, dtype='int32')
+            h = K.cast(h, dtype='int32')
 
-            # Resized roi of the image to pooling size (7x7)
+            # Resized roi of the image to pooling size (7 x 7)
             rs = tf.image.resize_images(img[:, y:y + h, x:x + w, :], (self.pool_size, self.pool_size))
             outputs.append(rs)
 
@@ -65,7 +71,7 @@ class RoiPoolingConv(Layer):
         # Might be (1, 4, 7, 7, 3)
         final_output = K.reshape(final_output, (1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
 
-        # permute_dimensions is similar to transpose
+        # permute_dimensions is similar to transpose (np.transpose)
         final_output = K.permute_dimensions(final_output, (0, 1, 2, 3, 4))
         return final_output
 
@@ -137,9 +143,13 @@ def classifier_layer(base_layers, input_rois, num_rois, nb_classes=4):
     # There are two output layer
     # out_class: softmax acivation function for classify the class name of the object
     # out_regr: linear activation function for bboxes coordinates regression
-    classifier_out_class_softmax = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'),
-                                                   name='dense_class_{}'.format(nb_classes))(out)
+    classifier_out_class_softmax = TimeDistributed(Dense(
+        nb_classes, activation='softmax', kernel_initializer='zero'),
+        name='dense_class_{}'.format(nb_classes)
+    )(out)
     # note: no regression target for bg class
-    classifier_out_bbox_linear_regression = TimeDistributed(Dense(4 * (nb_classes - 1), activation='linear', kernel_initializer='zero'),
-                                                       name='dense_regress_{}'.format(nb_classes))(out)
-    return [classifier_out_class_softmax, classifier_out_bbox_linear_regression]
+    classifier_out_bbox_linear_regression = TimeDistributed(Dense(
+        4 * (nb_classes - 1), activation='linear', kernel_initializer='zero'),
+        name='dense_regress_{}'.format(nb_classes)
+    )(out)
+    return classifier_out_class_softmax, classifier_out_bbox_linear_regression
