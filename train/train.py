@@ -47,19 +47,20 @@ random.shuffle(img_data_list)
 train_data_gen = get_anchor_gt(img_data_list, C, img_size_to_feature_map_size, mode='train')
 
 # ------ Build Model ------ #
-img_input_shape = (None, None, 3)
-img_input = Input(shape=img_input_shape)
+img_input = Input(shape=(None, None, 3))
 roi_input = Input(shape=(None, 4))
 
+num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)  # 3 x 3 = 9
 # Define the base network (VGG here, can be Resnet50, Inception, etc)
 shared_layers = get_vgg16(img_input)
 
-# define the RPN, built on the base layers
-num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)  # 3 x 3 = 9
-# rpn_layer return [x_class, x_regr, base_layers]
 rpn_out_class, rpn_out_regress = rpn_layer(shared_layers, num_anchors)
-# classifier_layer return [out_class, out_regr]
-classifier_out_class_softmax, classifier_out_bbox_linear_regression = classifier_layer(shared_layers, roi_input, C.num_rois, nb_classes=len(cls_cnt))
+classifier_out_class_softmax, classifier_out_bbox_linear_regression = classifier_layer(
+    shared_layers,
+    roi_input,
+    C.num_rois,
+    nb_classes=len(cls_cnt)
+)
 
 model_rpn = Model(img_input, [rpn_out_class, rpn_out_regress])
 model_classifier = Model(

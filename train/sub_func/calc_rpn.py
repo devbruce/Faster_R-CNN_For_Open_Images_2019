@@ -76,7 +76,6 @@ def calc_rpn(config, img_data, width, height, resized_width, resized_height, res
                     continue
 
                 for jy in range(output_height):
-
                     # y-coordinates of the current anchor box
                     y1_anc = downscale * (jy + 0.5) - anchor_y / 2
                     y2_anc = downscale * (jy + 0.5) + anchor_y / 2
@@ -127,7 +126,6 @@ def calc_rpn(config, img_data, width, height, resized_width, resized_height, res
                             th = np.log((gta[bbox_num, 3] - gta[bbox_num, 2]) / (y2_anc - y1_anc))
 
                         if img_data['bboxes'][bbox_num]['class'] != 'bg':
-
                             # all GT boxes should be mapped to an anchor box, so we keep track of which anchor box was best
                             if curr_iou > best_iou_for_bbox[bbox_num]:
                                 best_anchor_for_bbox[bbox_num] = [jy, ix, anchor_ratio_idx, anchor_size_idx]
