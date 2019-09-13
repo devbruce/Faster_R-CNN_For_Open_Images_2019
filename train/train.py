@@ -263,12 +263,12 @@ for epoch_num in range(num_epochs):
                 y=[Y_train_cls_num[:, selected_samples, :], Y_train_label_and_gt[:, selected_samples, :]],  # target data
             )
 
-            losses[iter_num, 0] = loss_rpn[1]
-            losses[iter_num, 1] = loss_rpn[2]
+            losses[iter_num, 0] = loss_rpn[1]  # loss_rpn_cls
+            losses[iter_num, 1] = loss_rpn[2]  # loss_rpn_regr
 
-            losses[iter_num, 2] = loss_class[1]
-            losses[iter_num, 3] = loss_class[2]
-            losses[iter_num, 4] = loss_class[3]
+            losses[iter_num, 2] = loss_class[1]  # loss_class_cls
+            losses[iter_num, 3] = loss_class[2]  # loss_class_regr
+            losses[iter_num, 4] = loss_class[3]  # class_acc
 
             iter_num += 1
 
