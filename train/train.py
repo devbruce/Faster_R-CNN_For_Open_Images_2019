@@ -45,7 +45,7 @@ model_rpn, model_classifier, model_all, df_record = build_model(config=C, cls_cn
 
 # Training settings
 total_saved_epochs = len(df_record)
-run_add_epochs = 10  # !Important
+run_add_epochs = 2  # !Important
 total_saved_epochs += run_add_epochs
 curr_epochs = len(df_record)
 epoch_length = nb_train_img  # It will be Number of Total Train Images
@@ -116,6 +116,7 @@ for _ in range(run_add_epochs):
             # Y_train_label_and_gt: corresponding labels and corresponding gt bboxes
             # calc_iou return np.expand_dims(X_roi, axis=0), np.expand_dims(Y_cls_num, axis=0), np.expand_dims(Y_label_and_gt, axis=0), IoUs
             X_train_roi, Y_train_cls_num, Y_train_label_and_gt, IouS = calc_iou(non_max_sup_bboxes, X_train_img_data, C, cls_mapping)
+            # X_train_roi.shape = (1, 160, 4)
 
             # If X_train_roi is None means there are no matching bboxes
             if X_train_roi is None:

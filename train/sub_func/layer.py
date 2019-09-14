@@ -39,7 +39,7 @@ class RoiPoolingConv(Layer):
     def build(self, input_shape):
         self.nb_channels = input_shape[0][3]
 
-    def compute_output_shape(self, input_shape):
+    def compute_output_shape(self):
         return None, self.num_rois, self.pool_size, self.pool_size, self.nb_channels
 
     def call(self, x):
@@ -74,16 +74,6 @@ class RoiPoolingConv(Layer):
         # permute_dimensions is similar to transpose (np.transpose)
         final_output = K.permute_dimensions(final_output, (0, 1, 2, 3, 4))
         return final_output
-
-    def get_config(self):
-        config = {
-            'pool_size': self.pool_size,
-            'num_rois': self.num_rois,
-        }
-        base_config = super(RoiPoolingConv, self).get_config()
-        return dict(
-            list(base_config.items()) + list(config.items())
-        )
 
 
 def rpn_layer(base_layers, num_anchors):

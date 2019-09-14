@@ -33,8 +33,7 @@ SAVE_MODEL_PATH = os.path.join(SAVED_MODEL_DIR, 'saved_model.hdf5')
 SAVE_CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.pickle')
 PRETAINED_MODEL_FILE_PATH = os.path.join(PRETAINED_MODEL_DIR, 'vgg16_weights_tf_dim_ordering_tf_kernels.h5')
 TRAIN_ANNOTATION_FILE_PATH = os.path.join(DATA_DIR, 'train_annotation.txt')
-# To Change If Train All Data
-MASK_ANNOTATION_FILE_PATH = os.path.join(DATA_DIR, 'train-segmentation-masks_light.csv')
+MASK_ANNOTATION_FILE_PATH = os.path.join(DATA_DIR, 'train-segmentation-masks_light.csv')  # To Change If Train All Data
 
 # Optimizer Function
 optimizer = Adam(lr=1e-5)
