@@ -48,7 +48,7 @@ for idx, row in df_mask_annotation.iterrows():
     label_name = row['LabelName']
     class_name = label_mapping_to_class_name[label_name]
     predicted_iou = row['PredictedIoU']
-    clicks = row['Clicks']
+    # clicks = row['Clicks']
 
     cur_row = img_file_path + ',' + \
               mask_img_file_path + ',' + \
@@ -57,8 +57,7 @@ for idx, row in df_mask_annotation.iterrows():
               str(x2) + ',' + \
               str(y2) + ',' + \
               class_name + ',' + \
-              str(predicted_iou) + ',' + \
-              clicks + '\n'
+              str(predicted_iou) + '\n'
     f.write(cur_row)
     sys.stdout.write(f'\r - Get Train Annotation File Progress: {str(idx+1)} / {nb_object}')
 

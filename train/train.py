@@ -5,6 +5,7 @@ import time
 
 from tensorflow.keras.utils import Progbar
 import numpy as np
+import pandas as pd
 
 from sub_func.get_data import get_data
 from sub_func.get_anchor_gt import get_anchor_gt
@@ -19,6 +20,7 @@ warnings.filterwarnings('ignore')
 random.seed(2019)
 PROGRESS_VERBOSE = True
 
+nb_train_img = len(pd.read_csv(MASK_ANNOTATION_FILE_PATH)['ImageID'].unique())
 img_data_list, cls_cnt, cls_mapping = get_data(TRAIN_ANNOTATION_FILE_PATH)
 C = Config()
 C.cls_mapping = cls_mapping
@@ -41,28 +43,27 @@ with open(SAVE_CONFIG_PATH, 'wb') as config_file:
 # Build Model
 model_rpn, model_classifier, model_all, df_record = build_model(config=C, cls_cnt=cls_cnt)
 
-# ==== --- Training Process --- ==== #
-# Training setting
-total_epochs = len(df_record)
-r_epochs = len(df_record)
+# Training settings
+total_saved_epochs = len(df_record)
+run_add_epochs = 10  # !Important
+total_saved_epochs += run_add_epochs
+curr_epochs = len(df_record)
+epoch_length = nb_train_img  # It will be Number of Total Train Images
 
-epoch_length = 1000
-num_epochs = 40
-iter_num = 0
-
-total_epochs += num_epochs
-
-rpn_accuracy_rpn_monitor = list()
-rpn_accuracy_for_epoch = list()
 losses = np.zeros((epoch_length, 5))
 best_loss = np.Inf if len(df_record) == 0 else np.min(df_record['curr_loss'])
 
+# Acc Monitor
+rpn_accuracy_rpn_monitor = list()
+rpn_accuracy_for_epoch = list()
+
 # === Training ====
+curr_iteration = 0
 start_time = time.time()
-for epoch_num in range(num_epochs):
-    print('Epoch {}/{}'.format(r_epochs+1, total_epochs))
+for _ in range(run_add_epochs):
+    print('Epoch {} / {}'.format(curr_epochs+1, total_saved_epochs))
     progbar = Progbar(epoch_length)
-    r_epochs += 1
+    curr_epochs += 1
 
     while True:
         try:
@@ -174,24 +175,24 @@ for epoch_num in range(num_epochs):
                 y=[Y_train_cls_num[:, selected_samples, :], Y_train_label_and_gt[:, selected_samples, :]],  # target data
             )
 
-            losses[iter_num, 0] = loss_rpn[1]  # loss_rpn_cls
-            losses[iter_num, 1] = loss_rpn[2]  # loss_rpn_regr
+            losses[curr_iteration, 0] = loss_rpn[1]  # loss_rpn_cls
+            losses[curr_iteration, 1] = loss_rpn[2]  # loss_rpn_regr
 
-            losses[iter_num, 2] = loss_class[1]  # loss_class_cls
-            losses[iter_num, 3] = loss_class[2]  # loss_class_regr
-            losses[iter_num, 4] = loss_class[3]  # class_acc
+            losses[curr_iteration, 2] = loss_class[1]  # loss_class_cls
+            losses[curr_iteration, 3] = loss_class[2]  # loss_class_regr
+            losses[curr_iteration, 4] = loss_class[3]  # class_acc
 
-            iter_num += 1
+            curr_iteration += 1
 
-            progbar.update(iter_num,
+            progbar.update(curr_iteration,
                            [
-                               ('rpn_cls', np.mean(losses[:iter_num, 0])),
-                               ('rpn_regr', np.mean(losses[:iter_num, 1])),
-                               ('final_cls', np.mean(losses[:iter_num, 2])),
-                               ('final_regr', np.mean(losses[:iter_num, 3])),
+                               ('rpn_cls', np.mean(losses[:curr_iteration, 0])),
+                               ('rpn_regr', np.mean(losses[:curr_iteration, 1])),
+                               ('final_cls', np.mean(losses[:curr_iteration, 2])),
+                               ('final_regr', np.mean(losses[:curr_iteration, 3])),
                            ])
 
-            if iter_num == epoch_length:
+            if curr_iteration == epoch_length:
                 loss_rpn_cls = np.mean(losses[:, 0])
                 loss_rpn_regr = np.mean(losses[:, 1])
                 loss_class_cls = np.mean(losses[:, 2])
@@ -214,7 +215,7 @@ for epoch_num in range(num_epochs):
                     elapsed_time = (time.time() - start_time) / 60
 
                 curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
-                iter_num = 0
+                curr_iteration = 0
                 start_time = time.time()
 
                 if curr_loss < best_loss:

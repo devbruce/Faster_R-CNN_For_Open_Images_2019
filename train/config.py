@@ -7,6 +7,7 @@ __all__ = (
     'ROOT_DIR', 'CONFIG_DIR', 'SAVED_MODEL_DIR', 'PRETAINED_MODEL_DIR', 'DATA_DIR', 'RECORD_DIR',
     'SAVE_RECORD_PATH', 'SAVE_MODEL_PATH', 'SAVE_CONFIG_PATH',
     'PRETAINED_MODEL_FILE_PATH', 'TRAIN_ANNOTATION_FILE_PATH',
+    'MASK_ANNOTATION_FILE_PATH',
     'optimizer', 'optimizer_classifier',
     'epsilon',
     'lambda_rpn_regr', 'lambda_rpn_class', 'lambda_cls_class', 'lambda_cls_regr',
@@ -32,6 +33,8 @@ SAVE_MODEL_PATH = os.path.join(SAVED_MODEL_DIR, 'saved_model.hdf5')
 SAVE_CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.pickle')
 PRETAINED_MODEL_FILE_PATH = os.path.join(PRETAINED_MODEL_DIR, 'vgg16_weights_tf_dim_ordering_tf_kernels.h5')
 TRAIN_ANNOTATION_FILE_PATH = os.path.join(DATA_DIR, 'train_annotation.txt')
+# To Change If Train All Data
+MASK_ANNOTATION_FILE_PATH = os.path.join(DATA_DIR, 'train-segmentation-masks_light.csv')
 
 # Optimizer Function
 optimizer = Adam(lr=1e-5)

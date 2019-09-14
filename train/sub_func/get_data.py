@@ -22,14 +22,12 @@ def get_data(fpath):
 
     print('#### Start Get Data From Annotation File ####')
     with open(fpath, 'rt') as f:
-        i = 1
-        for line in f:
+        for idx, line in enumerate(f, 1):
             # --- Print Process ---
-            sys.stdout.write('\r' + '* Current idx: ' + str(i))
-            i += 1
+            sys.stdout.write('\r' + '* Current idx: ' + str(idx))
             # --- ----- ------- ---
             line_split = line.strip().split(',')
-            img_path, img_mask_path, x1, y1, x2, y2, cls_name, predicted_iou, clicks = line_split
+            img_path, img_mask_path, x1, y1, x2, y2, cls_name, predicted_iou = line_split
 
             # Class Count
             if cls_name not in cls_cnt:
