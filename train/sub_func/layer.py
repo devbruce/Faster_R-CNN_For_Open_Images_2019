@@ -15,7 +15,7 @@ class RoiPoolingConv(Layer):
             Size of pooling region to use. pool_size = 7 will result in a 7x7 region.
         num_rois: number of regions of interest to be used
     # Input shape
-        list of two 4D tensors [X_img,X_roi] with shape:
+        list of two 4D tensors [X_img, X_roi] with shape:
         X_img:
         `(1, rows, cols, channels)`
         X_roi:
@@ -108,8 +108,11 @@ def rpn_layer(base_layers, num_anchors):
         (3, 3),
         padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv1'
     )(base_layers)
+    # x.shape = (?, ?, ?, 512)
     rpn_out_class = Conv2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class')(x)
     rpn_out_regress = Conv2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress')(x)
+    # rpn_out_class.shape = (?, ?, ?, 9)
+    # rpn_out_regress.shape = (?, ?, ?, 36)
     return rpn_out_class, rpn_out_regress
 
 
@@ -144,12 +147,12 @@ def classifier_layer(base_layers, input_rois, num_rois, nb_classes=4):
     # out_class: softmax acivation function for classify the class name of the object
     # out_regr: linear activation function for bboxes coordinates regression
     classifier_out_class_softmax = TimeDistributed(Dense(
-        nb_classes, activation='softmax', kernel_initializer='zero'),
+        units=nb_classes, activation='softmax', kernel_initializer='zero'),
         name='dense_class_{}'.format(nb_classes)
     )(out)
     # note: no regression target for bg class
     classifier_out_bbox_linear_regression = TimeDistributed(Dense(
-        4 * (nb_classes - 1), activation='linear', kernel_initializer='zero'),
+        units=4 * (nb_classes - 1), activation='linear', kernel_initializer='zero'),
         name='dense_regress_{}'.format(nb_classes)
     )(out)
     return classifier_out_class_softmax, classifier_out_bbox_linear_regression

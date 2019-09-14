@@ -1,24 +1,18 @@
 import warnings
 import pickle
 import random
-import os
 import time
 
-from tensorflow.keras.layers import Input
-from tensorflow.keras.models import Model
 from tensorflow.keras.utils import Progbar
-import pandas as pd
 import numpy as np
 
 from sub_func.get_data import get_data
 from sub_func.get_anchor_gt import get_anchor_gt
 from sub_func.img_prep import img_size_to_feature_map_size
-from sub_func.get_vgg16 import get_vgg16
-from sub_func.layer import rpn_layer, classifier_layer
-from sub_func.loss_func import rpn_loss_regr, rpn_loss_cls, class_loss_regr, class_loss_cls
 from sub_func.rpn_to_roi import rpn_to_roi
 from sub_func.calc_iou import calc_iou
 from config import *
+from build_model import build_model
 
 
 warnings.filterwarnings('ignore')
@@ -28,6 +22,10 @@ PROGRESS_VERBOSE = True
 img_data_list, cls_cnt, cls_mapping = get_data(TRAIN_ANNOTATION_FILE_PATH)
 C = Config()
 C.cls_mapping = cls_mapping
+# Shuffle the images with seed
+random.shuffle(img_data_list)
+# Get train data generator which generate X, Y, image_data
+train_data_gen = get_anchor_gt(img_data_list, C, img_size_to_feature_map_size, mode='train')
 
 if PROGRESS_VERBOSE:
     print(f'\nTraining images per class: {cls_cnt}')
@@ -40,102 +38,13 @@ with open(SAVE_CONFIG_PATH, 'wb') as config_file:
     print(f'\nConfig has been written to\n==> ({SAVE_CONFIG_PATH}),'
           '\nand can be loaded when testing to ensure correct results\n')
 
-# Shuffle the images with seed
-random.shuffle(img_data_list)
-
-# Get train data generator which generate X, Y, image_data
-train_data_gen = get_anchor_gt(img_data_list, C, img_size_to_feature_map_size, mode='train')
-
-# ------ Build Model ------ #
-img_input = Input(shape=(None, None, 3))
-roi_input = Input(shape=(None, 4))
-
-num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)  # 3 x 3 = 9
-# Define the base network (VGG here, can be Resnet50, Inception, etc)
-shared_layers = get_vgg16(img_input)
-
-rpn_out_class, rpn_out_regress = rpn_layer(shared_layers, num_anchors)
-classifier_out_class_softmax, classifier_out_bbox_linear_regression = classifier_layer(
-    shared_layers,
-    roi_input,
-    C.num_rois,
-    nb_classes=len(cls_cnt)
-)
-
-model_rpn = Model(img_input, [rpn_out_class, rpn_out_regress])
-model_classifier = Model(
-    [img_input, roi_input],
-    [classifier_out_class_softmax, classifier_out_bbox_linear_regression]
-)
-
-# this is a model that holds both the RPN and the classifier, used to load/save weights for the models
-model_all = Model(
-    [img_input, roi_input],
-    [rpn_out_class, rpn_out_regress, classifier_out_class_softmax, classifier_out_bbox_linear_regression]
-)
-
-# we need to save the model and load the model to continue training
-if not os.path.isfile(C.model_path):
-    # If this is the begin of the training, load the pre-traind base network such as vgg-16
-    try:
-        print('\nThis is the first time of your training')
-        print('Load weights from {}'.format(C.base_net_weights))
-        model_rpn.load_weights(C.base_net_weights, by_name=True)
-        model_classifier.load_weights(C.base_net_weights, by_name=True)
-    except:
-        print('Could not load pretrained model weights. Weights can be found in the keras application folder \
-            https://github.com/fchollet/keras/tree/master/keras/applications')
-
-    # Create the record.csv file to record losses, acc and mAP
-    record_df = pd.DataFrame(
-        columns=[
-            'mean_overlapping_bboxes',
-            'class_acc',
-            'loss_rpn_cls',
-            'loss_rpn_regr',
-            'loss_class_cls',
-            'loss_class_regr',
-            'curr_loss',
-            'elapsed_time',
-            'mAP'
-        ]
-    )
-else:
-    # If this is a continued training, load the trained model from before
-    print('\nContinue training based on previous trained model')
-    print('Loading weights from {}'.format(C.model_path))
-    model_rpn.load_weights(C.model_path, by_name=True)
-    model_classifier.load_weights(C.model_path, by_name=True)
-
-    record_df = pd.read_csv(SAVE_CONFIG_PATH)
-    r_mean_overlapping_bboxes = record_df['mean_overlapping_bboxes']
-    r_class_acc = record_df['class_acc']
-    r_loss_rpn_cls = record_df['loss_rpn_cls']
-    r_loss_rpn_regr = record_df['loss_rpn_regr']
-    r_loss_class_cls = record_df['loss_class_cls']
-    r_loss_class_regr = record_df['loss_class_regr']
-    r_curr_loss = record_df['curr_loss']
-    r_elapsed_time = record_df['elapsed_time']
-    r_mAP = record_df['mAP']
-    print('Already train %dK batches' % (len(record_df)))
-
-
-model_rpn.compile(optimizer=optimizer, loss=[rpn_loss_cls(num_anchors), rpn_loss_regr(num_anchors)])
-model_classifier.compile(
-    optimizer=optimizer_classifier,
-    loss=[
-        class_loss_cls,
-        class_loss_regr(len(cls_cnt)-1),
-    ],
-    metrics={f'dense_class_{len(cls_cnt)}': 'accuracy'},
-)
-model_all.compile(optimizer='sgd', loss='mae')
-
+# Build Model
+model_rpn, model_classifier, model_all, df_record = build_model(config=C, cls_cnt=cls_cnt)
 
 # ==== --- Training Process --- ==== #
 # Training setting
-total_epochs = len(record_df)
-r_epochs = len(record_df)
+total_epochs = len(df_record)
+r_epochs = len(df_record)
 
 epoch_length = 1000
 num_epochs = 40
@@ -143,15 +52,15 @@ iter_num = 0
 
 total_epochs += num_epochs
 
-losses = np.zeros((epoch_length, 5))
 rpn_accuracy_rpn_monitor = list()
 rpn_accuracy_for_epoch = list()
-best_loss = np.Inf if len(record_df) == 0 else np.min(r_curr_loss)
+losses = np.zeros((epoch_length, 5))
+best_loss = np.Inf if len(df_record) == 0 else np.min(df_record['curr_loss'])
 
 # === Training ====
 start_time = time.time()
 for epoch_num in range(num_epochs):
-    print('Epoch {}/{}'.format(r_epochs + 1, total_epochs))
+    print('Epoch {}/{}'.format(r_epochs+1, total_epochs))
     progbar = Progbar(epoch_length)
     r_epochs += 1
 
@@ -163,8 +72,8 @@ for epoch_num in range(num_epochs):
                 # print('Average number of overlapping bounding boxes from RPN = {} for {} previous iterations'.format(mean_overlapping_bboxes, epoch_length))
                 if mean_overlapping_bboxes == 0:
                     print(
-                        'RPN is not producing bounding boxes that overlap the ground truth boxes. '
-                        'Check RPN settings or keep training.'
+                        '!! RPN is not producing bounding boxes that overlap the ground truth boxes.\n'
+                        '\tCheck RPN settings or keep training. !!'
                     )
 
             # Generate X (x_img) and label Y ([y_rpn_cls, y_rpn_regr])
@@ -175,9 +84,11 @@ for epoch_num in range(num_epochs):
             loss_rpn = model_rpn.train_on_batch(X_train_img, Y_train)
 
             # Get predicted rpn from rpn model [rpn_cls, rpn_regr]
-            Y_hat_rpn = model_rpn.predict_on_batch(X_train_img)
+            Y_hat_rpn = model_rpn.predict_on_batch(x=X_train_img)
             Y_hat_rpn_cls = Y_hat_rpn[0]
             Y_hat_rpn_regr = Y_hat_rpn[1]
+            # Y_hat_rpn_cls.shape: (1, 18, 28, 9)
+            # Y_hat_rpn_regr.shape: (1, 18, 28, 36)
 
             # non_max_sup_bboxes: bboxes (shape=(300,4))
             # Convert rpn layer to roi bboxes
@@ -324,8 +235,8 @@ for epoch_num in range(num_epochs):
                     'mAP': 0
                 }
 
-                record_df = record_df.append(new_row, ignore_index=True)
-                record_df.to_csv(SAVE_RECORD_PATH, index=0)
+                df_record = df_record.append(new_row, ignore_index=True)
+                df_record.to_csv(SAVE_RECORD_PATH, index=0)
                 break
 
         except Exception as e:

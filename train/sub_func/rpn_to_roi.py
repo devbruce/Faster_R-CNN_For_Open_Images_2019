@@ -70,7 +70,7 @@ def non_max_suppression_fast(boxes, probs, overlap_thresh=0.9, max_boxes=300):
         boxes = boxes.astype("float")
 
     # initialize the list of picked indexes
-    pick = []
+    pick = list()
 
     # calculate the areas
     area = (x2 - x1) * (y2 - y1)
@@ -148,16 +148,15 @@ def rpn_to_roi(rpn_layer, regr_layer, config, use_regr=True, max_boxes=300, over
 
     assert rpn_layer.shape[0] == 1
 
-    rows, cols = rpn_layer.shape[1:3]
-
-    curr_layer = 0
+    height, width, num_achors = rpn_layer.shape[1:]
 
     # A.shape = (4, feature_map.height, feature_map.width, num_anchors)
     # Might be (4, 18, 25, 18) if resized image is 400 width and 300
     # A is the coordinates for 9 anchors for every point in the feature map
     # => all 18x25x9=4050 anchors cooridnates
-    A = np.zeros((4, rpn_layer.shape[1], rpn_layer.shape[2], rpn_layer.shape[3]))
+    A = np.zeros((4, height, width, num_achors))
 
+    curr_layer = 0
     for anchor_size in anchor_sizes:
         for anchor_ratio in anchor_ratios:
             anchor_x = (anchor_size * anchor_ratio[0]) / config.rpn_stride  # width of current anchor
@@ -172,7 +171,7 @@ def rpn_to_roi(rpn_layer, regr_layer, config, use_regr=True, max_boxes=300, over
             # For every point in x, there are all the y points and vice versa
             # X.shape = (18, 25)
             # Y.shape = (18, 25)
-            X, Y = np.meshgrid(np.arange(cols), np.arange(rows))
+            X, Y = np.meshgrid(np.arange(width), np.arange(height))
 
             # Calculate anchor position and size for each feature map point
             A[0, :, :, curr_layer] = X - anchor_x / 2  # Top left x coordinate
@@ -197,8 +196,8 @@ def rpn_to_roi(rpn_layer, regr_layer, config, use_regr=True, max_boxes=300, over
             # Avoid bboxes drawn outside the feature map
             A[0, :, :, curr_layer] = np.maximum(0, A[0, :, :, curr_layer])
             A[1, :, :, curr_layer] = np.maximum(0, A[1, :, :, curr_layer])
-            A[2, :, :, curr_layer] = np.minimum(cols-1, A[2, :, :, curr_layer])
-            A[3, :, :, curr_layer] = np.minimum(rows-1, A[3, :, :, curr_layer])
+            A[2, :, :, curr_layer] = np.minimum(width - 1, A[2, :, :, curr_layer])
+            A[3, :, :, curr_layer] = np.minimum(height - 1, A[3, :, :, curr_layer])
 
             curr_layer += 1
 
