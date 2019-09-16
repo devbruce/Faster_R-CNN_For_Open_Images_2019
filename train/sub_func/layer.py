@@ -6,7 +6,7 @@ from tensorflow.keras.layers import Layer, Dense, Conv2D, MaxPooling2D, TimeDist
 _all__ = ['RoiPoolingConv', 'rpn_layer', 'classifier_layer']
 
 
-class RoiPoolingConv(Layer):
+class RoiPoolingLayer(Layer):
     """ROI pooling layer for 2D inputs.
     See Spatial Pyramid Pooling in Deep Convolutional Networks for Visual Recognition,
     K. He, X. Zhang, S. Ren, J. Sun
@@ -19,25 +19,19 @@ class RoiPoolingConv(Layer):
         X_img:
         `(1, rows, cols, channels)`
         X_roi:
-        `(1,num_rois,4)` list of rois, with ordering (x,y,w,h)
+        `(1,num_rois,4)` list of rois, with ordering (x1, y1, w, h)
     # Output shape
         3D tensor with shape:
         `(1, num_rois, channels, pool_size, pool_size)`
     """
-    # Use Like Below (In the classifier_layer)
-    # # ### input_shape = (num_rois, 7, 7, 512)
-    # pooling_regions = 7
-    # # ### out_roi_pool.shape = (1, num_rois, channels, pool_size, pool_size)
-    # # ### num_rois (4) 7x7 roi pooling
-    # out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
-
+    # Used In the classifier_layer
     def __init__(self, pool_size, num_rois, **kwargs):
         self.pool_size = pool_size
         self.num_rois = num_rois
-        super(RoiPoolingConv, self).__init__(**kwargs)
+        super(RoiPoolingLayer, self).__init__(**kwargs)
 
-    def build(self, input_shape):
-        self.nb_channels = input_shape[0][3]
+    def build(self, input_shape):  # input_shape 는 input 으로 들어오는 layer 의 shape 를 자동으로 할당
+        self.nb_channels = input_shape[0][3]  # base_layer.shape[3]
 
     def compute_output_shape(self):
         return None, self.num_rois, self.pool_size, self.pool_size, self.nb_channels
@@ -46,33 +40,29 @@ class RoiPoolingConv(Layer):
         assert (len(x) == 2)
         # x[0] is image with shape (rows, cols, channels)
         img = x[0]
-        # x[1] is roi with shape (num_rois, 4) with ordering (x, y, w, h)
+        # x[1] is roi with shape (num_rois, 4) with ordering (x1, y1, w, h)
         rois = x[1]
         outputs = list()
 
         for roi_idx in range(self.num_rois):
-            x = rois[0, roi_idx, 0]
-            y = rois[0, roi_idx, 1]
+            x1 = rois[0, roi_idx, 0]
+            y1 = rois[0, roi_idx, 1]
             w = rois[0, roi_idx, 2]
             h = rois[0, roi_idx, 3]
 
-            x = K.cast(x, dtype='int32')
-            y = K.cast(y, dtype='int32')
+            x1 = K.cast(x1, dtype='int32')
+            y1 = K.cast(y1, dtype='int32')
             w = K.cast(w, dtype='int32')
             h = K.cast(h, dtype='int32')
 
             # Resized roi of the image to pooling size (7 x 7)
-            rs = tf.image.resize_images(img[:, y:y + h, x:x + w, :], (self.pool_size, self.pool_size))
+            rs = tf.image.resize_images(img[:, y1:y1+h, x1:x1+w, :], (self.pool_size, self.pool_size))
             outputs.append(rs)
 
         final_output = K.concatenate(outputs, axis=0)
-
-        # Reshape to (1, num_rois, pool_size, pool_size, nb_channels)
-        # Might be (1, 4, 7, 7, 3)
         final_output = K.reshape(final_output, (1, self.num_rois, self.pool_size, self.pool_size, self.nb_channels))
-
         # permute_dimensions is similar to transpose (np.transpose)
-        final_output = K.permute_dimensions(final_output, (0, 1, 2, 3, 4))
+        # final_output = K.permute_dimensions(final_output, (0, 1, 2, 3, 4))
         return final_output
 
 
@@ -119,12 +109,12 @@ def classifier_layer(base_layers, input_rois, num_rois, nb_classes=4):
         out_class: classifier layer output
         out_regr: regression layer output
     """
-
-    # input_shape = (num_rois, 7, 7, 512)
-    pooling_regions = 7
     # out_roi_pool.shape = (1, num_rois, channels, pool_size, pool_size)
     # num_rois (4) 7x7 roi pooling
-    out_roi_pool = RoiPoolingConv(pooling_regions, num_rois)([base_layers, input_rois])
+    input_layers = [base_layers, input_rois]
+    pooling_regions = 7
+    out_roi_pool = RoiPoolingLayer(pooling_regions, num_rois)(input_layers)
+    # out_roi_pool.shape: (1, 4, 7, 7, 512)
 
     # Flatten the convlutional layer and connected to 2 FC and 2 dropout
     out = TimeDistributed(Flatten(name='flatten'))(out_roi_pool)
