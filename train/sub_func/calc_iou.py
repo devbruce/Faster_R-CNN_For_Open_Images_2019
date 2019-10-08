@@ -97,11 +97,9 @@ def calc_iou(non_max_sup_bboxes, img_data, config, cls_mapping):
             sx, sy, sw, sh = config.classifier_regr_std  # [8.0, 8.0, 4.0, 4.0]
             coords[label_pos:4+label_pos] = [tx * sx, ty * sy, tw * sw, th * sh]
             labels[label_pos:4+label_pos] = [1, 1, 1, 1]
-            y_class_regr_coords.append(copy.deepcopy(coords))
-            y_class_regr_label.append(copy.deepcopy(labels))
-        else:
-            y_class_regr_coords.append(copy.deepcopy(coords))
-            y_class_regr_label.append(copy.deepcopy(labels))
+
+        y_class_regr_coords.append(copy.deepcopy(coords))
+        y_class_regr_label.append(copy.deepcopy(labels))
 
     if len(x_roi) == 0:
         return None, None, None, None

@@ -78,7 +78,7 @@ for _ in range(run_add_epochs):
                     )
 
             # Generate X (x_img) and label Y ([y_rpn_cls, y_rpn_regr])
-            # yield np.copy(img_aug), [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], img_data_aug, debug_img, num_pos
+            # np.copy(img_aug), img_data_aug, [np.copy(y_rpn_cls), np.copy(y_rpn_regr)], debug_img, num_pos
             X_train_img, X_train_img_data, Y_train, debug_img, debug_num_pos = next(train_data_gen)
 
             # Train rpn model and get loss value [_, loss_rpn_cls, loss_rpn_regr]

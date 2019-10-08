@@ -8,7 +8,7 @@ __all__ = ['calc_rpn']
 
 def calc_rpn(config, img_data, width, height, resized_width, resized_height, resize_func):
     """(Important part!) Calculate the rpn for all anchors
-        If feature map has shape 38x50=1900, there are 1900x9=17100 potential anchors
+        If feature map has shape 38x50=1900, there are 1900x(3 x 3)=17100 potential anchors
 
     Args:
         config: Config instance
@@ -43,11 +43,11 @@ def calc_rpn(config, img_data, width, height, resized_width, resized_height, res
 
     num_bboxes = len(img_data['bboxes'])
 
-    num_anchors_for_bbox = np.zeros(num_bboxes).astype(int)
-    best_anchor_for_bbox = -1 * np.ones((num_bboxes, 4)).astype(int)
-    best_iou_for_bbox = np.zeros(num_bboxes).astype(np.float32)
-    best_x_for_bbox = np.zeros((num_bboxes, 4)).astype(int)
-    best_dx_for_bbox = np.zeros((num_bboxes, 4)).astype(np.float32)
+    num_anchors_for_bbox = np.zeros(num_bboxes).astype(int)  # 각 bbox 마다 anchor 갯수
+    best_anchor_for_bbox = -1 * np.ones((num_bboxes, 4)).astype(int)  # 각 bbox 마다 best anchor (x, y, w, h)
+    best_iou_for_bbox = np.zeros(num_bboxes).astype(np.float32)  # 각 bbox 마다 best IOU
+    best_x_for_bbox = np.zeros((num_bboxes, 4)).astype(int)  # 각 bbox 마다 (x1, x2, y1, y2)
+    best_dx_for_bbox = np.zeros((num_bboxes, 4)).astype(np.float32)  # 각 bbox 마다 (tx, ty, tw, th)
 
     # get the GT box coordinates, and resize to account for image resizing
     gta = np.zeros((num_bboxes, 4))
@@ -120,10 +120,13 @@ def calc_rpn(config, img_data, width, height, resized_width, resized_height, res
                             # ty = (y - ya) / ha
                             # tw = log(w / wa)
                             # th = log(h / ha)
-                            tx = (cx - cxa) / (x2_anc - x1_anc)
-                            ty = (cy - cya) / (y2_anc - y1_anc)
-                            tw = np.log((gta[bbox_num, 1] - gta[bbox_num, 0]) / (x2_anc - x1_anc))
-                            th = np.log((gta[bbox_num, 3] - gta[bbox_num, 2]) / (y2_anc - y1_anc))
+                            wa = x2_anc - x1_anc
+                            ha = y2_anc - y1_anc
+
+                            tx = (cx - cxa) / wa
+                            ty = (cy - cya) / ha
+                            tw = np.log((gta[bbox_num, 1] - gta[bbox_num, 0]) / wa)
+                            th = np.log((gta[bbox_num, 3] - gta[bbox_num, 2]) / ha)
 
                         if img_data['bboxes'][bbox_num]['class'] != 'bg':
                             # all GT boxes should be mapped to an anchor box, so we keep track of which anchor box was best
